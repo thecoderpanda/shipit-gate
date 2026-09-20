@@ -69,8 +69,24 @@ export function renderReport(
   lines.push(`    reason_category    ${decision.reason_category}`);
   lines.push('');
   if (gate.block) {
-    lines.push(`  ${kleur.bold().red('Why blocked:')}`);
-    for (const r of gate.reasons) lines.push(`    • ${r}`);
+    lines.push(`  ${kleur.bold().red('Why blocked')}`);
+    lines.push('');
+    lines.push(`    ${kleur.bold("Jev's read:")} ${decision.human_summary}`);
+    lines.push(
+      `    ${kleur.dim('category:')} ${categoryLabel(decision.reason_category)}   ` +
+        `${kleur.dim('confidence:')} ${(decision.confidence.human_summary ?? 0).toFixed(2)}`,
+    );
+    lines.push('');
+
+    const evidence = buildEvidence(signals, decision);
+    if (evidence.length) {
+      lines.push(`    ${kleur.bold('What Jev saw:')}`);
+      for (const e of evidence) lines.push(`      • ${e}`);
+      lines.push('');
+    }
+
+    lines.push(`    ${kleur.bold('Gates tripped by your policy:')}`);
+    for (const r of gate.reasons) lines.push(`      • ${r}`);
     lines.push('');
     lines.push(kleur.dim('  Override with: shipit check --force (not recommended on Friday)'));
   } else {
@@ -78,4 +94,54 @@ export function renderReport(
   }
   lines.push('');
   return lines.join('\n');
+}
+
+function categoryLabel(c: JevDecision['reason_category']): string {
+  switch (c) {
+    case 'timing': return 'timing (day/hour makes this risky)';
+    case 'diff_risk': return 'diff_risk (change itself is risky)';
+    case 'tests': return 'tests (failing or missing)';
+    case 'dirty_tree': return 'dirty_tree (branch state unclear)';
+    case 'safe': return 'safe';
+    default: return 'other';
+  }
+}
+
+function buildEvidence(signals: DeploySignals, decision: JevDecision): string[] {
+  const ev: string[] = [];
+
+  if (signals.time.isFriday && signals.time.hour24 >= 15)
+    ev.push(`Friday ${signals.time.hour24}:00 — late-week deploy window`);
+  else if (signals.time.isWeekend)
+    ev.push(`${signals.time.weekday} deploy — no one on call`);
+  else if (signals.time.isAfterHours)
+    ev.push(`After-hours (${signals.time.weekday} ${signals.time.hour24}:00)`);
+
+  if (signals.tests.ran && !signals.tests.passed)
+    ev.push(`Tests failed (exit ${signals.tests.exitCode ?? '?'})`);
+  else if (!signals.tests.ran)
+    ev.push('No tests were run before shipping');
+
+  if (signals.git.isDirty)
+    ev.push(`Working tree dirty (${signals.git.dirtyFiles} uncommitted file${signals.git.dirtyFiles === 1 ? '' : 's'})`);
+
+  const risky: string[] = [];
+  if (signals.diff.touchesMigrations) risky.push('migrations');
+  if (signals.diff.touchesAuth) risky.push('auth');
+  if (signals.diff.touchesPayments) risky.push('payments');
+  if (signals.diff.touchesInfra) risky.push('infra');
+  if (signals.diff.touchesConfig) risky.push('config');
+  if (risky.length) ev.push(`Diff touches sensitive areas: ${risky.join(', ')}`);
+
+  if (signals.diff.filesChanged >= 20)
+    ev.push(`Large diff: ${signals.diff.filesChanged} files, +${signals.diff.insertions} -${signals.diff.deletions}`);
+
+  if (decision.rollback_risk >= 0.7)
+    ev.push(`Jev estimates ${Math.round(decision.rollback_risk * 100)}% chance of needing a rollback within 24h`);
+  if (decision.deploy_confidence < 0.5)
+    ev.push(`Jev estimates only ${Math.round(decision.deploy_confidence * 100)}% chance this deploys cleanly`);
+  if (decision.blast_radius === 'critical' || decision.blast_radius === 'high')
+    ev.push(`Blast radius = ${decision.blast_radius} (auth/payments/data or core user flow)`);
+
+  return ev;
 }
