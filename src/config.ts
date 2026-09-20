@@ -6,7 +6,7 @@ const ConfigSchema = z.object({
   target: z.string().default('production'),
   baseRef: z.string().default('origin/main'),
   testCommand: z.string().nullable().default(null),
-  model: z.string().default('typesafe-ai/jev'),
+  model: z.string().default('jev-latest'),
   blockOn: z
     .object({
       shouldBlock: z.boolean().default(true),

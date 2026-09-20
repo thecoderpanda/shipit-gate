@@ -98,7 +98,7 @@ program
       target: 'production',
       baseRef: 'origin/main',
       testCommand: 'npm test',
-      model: 'typesafe-ai/jev',
+      model: 'jev-latest',
       blockOn: {
         shouldBlock: true,
         minConfidence: 0.5,
