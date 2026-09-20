@@ -11,7 +11,7 @@ No hallucinated JSON. No "let me think step by step". Just a boolean, a confiden
 ## See it in action (10 seconds, no API key)
 
 ```bash
-git clone https://github.com/YOUR_ORG/shipit-gate.git
+git clone https://github.com/thecoderpanda/shipit-gate.git
 cd shipit-gate && npm install && npm run build
 ./demo/run.sh
 ```
