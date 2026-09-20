@@ -1,22 +1,39 @@
 import type { DeploySignals } from './signals/index.js';
 
-type EvaluateFn = (args: {
+const DEFAULT_ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
+
+interface JevRawResponse {
+  answers: Record<string, { value: unknown; confidence: number }>;
+}
+
+async function callSystemOne(args: {
+  endpoint: string;
+  apiKey: string;
   model: string;
   state: string;
   questions: unknown;
-  headers?: Record<string, string>;
-}) => Promise<{ answers: Record<string, { value: unknown; confidence: number }> }>;
-
-async function loadEvaluate(): Promise<EvaluateFn> {
-  const mod = (await import('ai')) as unknown as Record<string, unknown>;
-  const fn = (mod.experimental_evaluate ?? mod.evaluate) as EvaluateFn | undefined;
-  if (typeof fn !== 'function') {
-    throw new Error(
-      "Your installed 'ai' SDK doesn't expose experimental_evaluate yet. " +
-        'Update with: npm i ai@latest (Jev support requires the AI SDK Jev preview).',
-    );
+}): Promise<JevRawResponse> {
+  const res = await fetch(args.endpoint, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${args.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: args.model,
+      state: args.state,
+      questions: args.questions,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`TypeSafe AI ${res.status} ${res.statusText}: ${text.slice(0, 400)}`);
   }
-  return fn;
+  const json = (await res.json()) as JevRawResponse;
+  if (!json || typeof json !== 'object' || !json.answers) {
+    throw new Error('Unexpected Jev response shape: missing "answers" field');
+  }
+  return json;
 }
 
 export interface JevDecision {
@@ -34,6 +51,7 @@ export interface AskJevOptions {
   target: string;
   apiKey: string;
   model?: string;
+  endpoint?: string;
 }
 
 function renderState(signals: DeploySignals, target: string): string {
@@ -138,17 +156,21 @@ const QUESTIONS = {
   },
 };
 
-export async function askJev({ signals, target, apiKey, model = 'typesafe-ai/jev' }: AskJevOptions): Promise<JevDecision> {
+export async function askJev({
+  signals,
+  target,
+  apiKey,
+  model = 'jev-1',
+  endpoint,
+}: AskJevOptions): Promise<JevDecision> {
   const state = renderState(signals, target);
-  const evaluate = await loadEvaluate();
 
-  const result = await evaluate({
+  const result = await callSystemOne({
+    endpoint: endpoint ?? process.env.TYPESAFE_API_URL ?? DEFAULT_ENDPOINT,
+    apiKey,
     model,
     state,
     questions: QUESTIONS,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
   });
 
   const answers = result.answers;
