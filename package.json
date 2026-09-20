@@ -15,6 +15,15 @@
     "friday-deploy"
   ],
   "license": "MIT",
+  "author": "thecoderpanda",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thecoderpanda/shipit-gate.git"
+  },
+  "homepage": "https://github.com/thecoderpanda/shipit-gate#readme",
+  "bugs": {
+    "url": "https://github.com/thecoderpanda/shipit-gate/issues"
+  },
   "bin": {
     "shipit": "./dist/cli.js"
   },
