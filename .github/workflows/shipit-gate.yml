@@ -1,0 +1,25 @@
+name: shipit-gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ask-jev:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install shipit-gate
+        run: npm install -g shipit-gate
+
+      - name: Ask Jev if it is safe to ship
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+        run: shipit check --target production --base origin/${{ github.event.pull_request.base.ref || 'main' }}

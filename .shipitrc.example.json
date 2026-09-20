@@ -1,0 +1,12 @@
+{
+  "target": "production",
+  "baseRef": "origin/main",
+  "testCommand": "npm test",
+  "model": "typesafe-ai/jev",
+  "blockOn": {
+    "shouldBlock": true,
+    "minConfidence": 0.5,
+    "maxRollbackRisk": 0.7,
+    "blockBlastRadius": ["critical"]
+  }
+}
