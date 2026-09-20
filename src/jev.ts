@@ -1,5 +1,23 @@
-import { experimental_evaluate as evaluate } from 'ai';
 import type { DeploySignals } from './signals/index.js';
+
+type EvaluateFn = (args: {
+  model: string;
+  state: string;
+  questions: unknown;
+  headers?: Record<string, string>;
+}) => Promise<{ answers: Record<string, { value: unknown; confidence: number }> }>;
+
+async function loadEvaluate(): Promise<EvaluateFn> {
+  const mod = (await import('ai')) as unknown as Record<string, unknown>;
+  const fn = (mod.experimental_evaluate ?? mod.evaluate) as EvaluateFn | undefined;
+  if (typeof fn !== 'function') {
+    throw new Error(
+      "Your installed 'ai' SDK doesn't expose experimental_evaluate yet. " +
+        'Update with: npm i ai@latest (Jev support requires the AI SDK Jev preview).',
+    );
+  }
+  return fn;
+}
 
 export interface JevDecision {
   should_block: boolean;
@@ -122,6 +140,7 @@ const QUESTIONS = {
 
 export async function askJev({ signals, target, apiKey, model = 'typesafe-ai/jev' }: AskJevOptions): Promise<JevDecision> {
   const state = renderState(signals, target);
+  const evaluate = await loadEvaluate();
 
   const result = await evaluate({
     model,
@@ -130,9 +149,9 @@ export async function askJev({ signals, target, apiKey, model = 'typesafe-ai/jev
     headers: {
       Authorization: `Bearer ${apiKey}`,
     },
-  } as never);
+  });
 
-  const answers = (result as { answers: Record<string, { value: unknown; confidence: number }> }).answers;
+  const answers = result.answers;
 
   return {
     should_block: answers.should_block.value as boolean,
