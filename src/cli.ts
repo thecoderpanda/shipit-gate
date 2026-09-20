@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import kleur from 'kleur';
 import { collectAll } from './signals/index.js';
 import { askJev } from './jev.js';
+import { mockJev, type MockScenario } from './mock.js';
 import { loadConfig, shouldBlock } from './config.js';
 import { renderReport } from './render.js';
 
@@ -22,6 +23,7 @@ program
   .option('--json', 'output raw JSON instead of the pretty report')
   .option('--force', 'do NOT exit non-zero even if Jev blocks (not recommended)')
   .option('--dry-run', 'skip Jev call, print collected signals only')
+  .option('--mock [scenario]', 'demo mode: fake Jev response (safe|risky|blocked|auto)')
   .action(async (opts: {
     target?: string;
     base?: string;
@@ -29,6 +31,7 @@ program
     json?: boolean;
     force?: boolean;
     dryRun?: boolean;
+    mock?: string | boolean;
   }) => {
     const cfg = loadConfig();
     const target = opts.target ?? cfg.target;
@@ -43,22 +46,29 @@ program
       return;
     }
 
-    const apiKey = process.env.TYPESAFE_API_KEY ?? process.env.VERCEL_AI_GATEWAY_KEY ?? '';
-    if (!apiKey) {
-      process.stderr.write(
-        kleur.red('✗ Missing TYPESAFE_API_KEY (or VERCEL_AI_GATEWAY_KEY) env var.\n') +
-          kleur.dim('  Get one at https://typesafe.ai and re-run.\n'),
-      );
-      process.exit(2);
-    }
-
-    process.stderr.write(kleur.dim('→ asking jev...\n'));
     let decision;
-    try {
-      decision = await askJev({ signals, target, apiKey, model: cfg.model });
-    } catch (err) {
-      process.stderr.write(kleur.red('✗ Jev call failed: ') + String((err as Error).message) + '\n');
-      process.exit(2);
+    if (opts.mock !== undefined) {
+      const scenario = (typeof opts.mock === 'string' ? opts.mock : 'auto') as MockScenario;
+      process.stderr.write(kleur.dim(`→ asking jev... `) + kleur.magenta(`[mock:${scenario}]\n`));
+      await new Promise((r) => setTimeout(r, 220));
+      decision = mockJev(signals, scenario);
+    } else {
+      const apiKey = process.env.TYPESAFE_API_KEY ?? process.env.VERCEL_AI_GATEWAY_KEY ?? '';
+      if (!apiKey) {
+        process.stderr.write(
+          kleur.red('✗ Missing TYPESAFE_API_KEY (or VERCEL_AI_GATEWAY_KEY) env var.\n') +
+            kleur.dim('  Get one at https://typesafe.ai and re-run, or try --mock for a demo.\n'),
+        );
+        process.exit(2);
+      }
+
+      process.stderr.write(kleur.dim('→ asking jev...\n'));
+      try {
+        decision = await askJev({ signals, target, apiKey, model: cfg.model });
+      } catch (err) {
+        process.stderr.write(kleur.red('✗ Jev call failed: ') + String((err as Error).message) + '\n');
+        process.exit(2);
+      }
     }
 
     const gate = shouldBlock(cfg, decision);
